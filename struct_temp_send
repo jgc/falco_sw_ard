@@ -1,0 +1,403 @@
+#include <RFM69.h>
+#include <SPI.h>
+#include <OneWire.h>
+#include <DallasTemperature.h>
+#include <JeeLib.h>
+#include <avr/sleep.h>
+
+#define ONE_WIRE_BUS 8
+#define ONE_WIRE_POW 9
+#define TEMPERATURE_PRECISION 12
+
+OneWire oneWire(ONE_WIRE_BUS);
+DallasTemperature sensors(&oneWire);
+int numberOfDevices;
+DeviceAddress tempDeviceAddress;
+
+volatile bool adcDone;
+ISR(ADC_vect) {
+  adcDone = true;
+}
+ISR(WDT_vect) {
+  Sleepy::watchdogEvent();
+}
+
+
+//#define LED_PIN (13)
+
+volatile int f_timer = 0;
+
+#define NODEID      5
+//uint8_t NODEID = 0;
+#define NETWORKID   100
+#define GATEWAYID   31
+#define FREQUENCY   RF69_868MHZ //Match this with the version of your Moteino! (others: RF69_433MHZ, RF69_868MHZ)
+#define KEY         "sampleEncryptKey" //has to be same 16 characters/bytes on all nodes, not more not less!
+#define LED         13
+//#define RADIOSW     4
+#define SERIAL_BAUD 57600
+#define ACK_TIME    20  // # of ms to wait for an ack was 30
+
+#define EV0 999
+#define tMin -20
+#define tMax 80
+int tT0 = 999;
+int maxT = 999;
+int minT = 999;
+
+byte resetT = 0; // reset max / min
+
+//int TRANSMITPERIOD = 60000; //transmit a packet to gateway so often (in ms)
+int TRANSMITPERIOD = 54980; // was 54750 // 54850 // 54900 // 54950 // 54975 //*54580*//?54985?// 55000 // 55015 // 55025 // 55050 // 55100
+byte sendSize = 0;
+boolean requestACK = false;
+//SPIFlash flash(8, 0xEF30); //EF40 for 16mbit windbond chip
+RFM69 radio;
+
+bool waitForRF = 0;
+
+typedef struct {
+  // cannot be more than 12 bytes (14 gives error???)
+  uint8_t           node;
+  uint8_t           tran;
+  int16_t           batt;   // battery voltage in millivolts
+  int16_t           value1; // Current temperature in dec * 100
+  int16_t           value2; // Minimum temperature in dec * 100
+  int16_t           value3; // Maximum temperature in dec * 100
+  int16_t           value4; // Maximum temperature in dec * 100
+} Payload;
+Payload theData;
+
+long lastPeriod = -1;
+
+
+// *** SETUP ***
+// *** SETUP ***
+// *** SETUP ***
+void setup() {
+  Serial.begin(SERIAL_BAUD);
+  //randomSeed(analogRead(0));
+  //NODEID = random(1,9);
+  Serial.println("Struct_temp_send_5  ... setup started ...");
+  //Serial.print("Delay: ");
+  //Serial.println(TRANSMITPERIOD);
+  //pinMode(RADIOSW, OUTPUT);
+  //digitalWrite(RADIOSW, HIGH);
+  //delay(100);
+  radio.initialize(FREQUENCY, NODEID, NETWORKID);
+  radio.setHighPower(); //uncomment only for RFM69HW!
+  radio.encrypt(KEY);
+  char buff[50];
+  sprintf(buff, "\nTransmitting at %d Mhz...", FREQUENCY == RF69_433MHZ ? 433 : FREQUENCY == RF69_868MHZ ? 868 : 915);
+  Serial.println(buff);
+
+  cli();
+  CLKPR = bit(CLKPCE);
+  sei();
+
+  pinMode(ONE_WIRE_POW, OUTPUT);
+  digitalWrite(ONE_WIRE_POW, HIGH);
+  Serial.println("Dallas Temperature IC Control Library Demo");
+
+  sensors.begin();
+  numberOfDevices = sensors.getDeviceCount();
+
+  Serial.print("Locating devices...");
+  Serial.print("Found ");
+  Serial.print(numberOfDevices, DEC);
+  Serial.println(" devices.");
+  Serial.print("Parasite power is: ");
+  if (sensors.isParasitePowerMode()) Serial.println("ON");
+  else Serial.println("OFF");
+
+  for (int i = 0; i < numberOfDevices; i++)
+  {
+    if (sensors.getAddress(tempDeviceAddress, i))
+    {
+      Serial.print("Found device ");
+      Serial.print(i, DEC);
+      Serial.print(" with address: ");
+      printAddress(tempDeviceAddress);
+      Serial.println();
+      Serial.print("Setting resolution to ");
+      Serial.println(TEMPERATURE_PRECISION, DEC);
+      sensors.setResolution(tempDeviceAddress, TEMPERATURE_PRECISION);
+      Serial.print("Resolution actually set to: ");
+      Serial.print(sensors.getResolution(tempDeviceAddress), DEC);
+      Serial.println();
+    } else {
+      Serial.print("Found ghost device at ");
+      Serial.print(i, DEC);
+      Serial.print(" but could not detect address. Check power and cabling");
+    }
+  }
+
+  delay(1000);
+}
+
+
+
+// *** LOOP ***
+// *** LOOP ***
+// *** LOOP ***
+void loop() {
+
+  //  radio.sleep();
+  //  if (waitForRF == 1){
+  //      waitForRF = 0;
+  //      Serial.flush();
+  //      Sleepy::loseSomeTime(59973);
+  //  }
+
+  int currPeriod = millis() / TRANSMITPERIOD;
+
+  if (currPeriod != lastPeriod)
+    Serial.println();
+
+  Serial.println( readVcc(), DEC );
+  calcT();
+
+  //readTempVolts();
+
+  //fill in the struct with new values
+  theData.node = NODEID;
+  Serial.print("Node = ");
+  Serial.print(theData.node);
+  Serial.print("; ");
+  Serial.print("Tran = ");
+  Serial.print(theData.tran);
+  Serial.print("; ");
+  Serial.print("Batt = ");
+  Serial.print(theData.batt);
+  Serial.print("; ");
+  Serial.print("Value1 = ");
+  Serial.print(theData.value1);
+  Serial.print("; ");
+  Serial.print("Value2 = ");
+  Serial.print(theData.value2);
+  Serial.print("; ");
+  Serial.print("Value3 = ");
+  Serial.print(theData.value3);
+  Serial.println(";");
+  //Serial.print("; theData.value4 = ");
+  //Serial.println(theData.value4);
+
+  //Blink(LED, 1000);
+  //digitalWrite(RADIOSW, HIGH);
+  //Serial.println("Radio on ...");
+  //delay(1000);
+  //radio.initialize(FREQUENCY, NODEID, NETWORKID);
+  //radio.setHighPower(); //uncomment only for RFM69HW!
+  //radio.encrypt(KEY);
+  //**delay(10);
+  Serial.print("Sending struct (");
+  Serial.print(sizeof(theData));
+  Serial.print(" bytes) ... ");
+  //    if (radio.sendWithRetry(GATEWAYID, (const void*)(&theData), sizeof(theData)), 1)
+  if (radio.send(GATEWAYID, (const void*)(&theData), sizeof(theData)), 0)
+  {
+    Serial.println(" ok");
+    //waitForRF = 1;
+  }
+  else
+  {
+    Serial.println(" not ok");
+  }
+
+  delay(60);
+  // MUST HAVE DELAY to allow temp reset message to be received.
+  // If delay too long then ACK not sent in time.
+  if (radio.receiveDone()) // ADD VALIDATION CHECKS
+  {
+    if (radio.ACKRequested())
+    {
+      radio.sendACK();
+      Serial.println(" - ACK sent");
+    }
+
+    theData = *(Payload*)radio.DATA;
+    Serial.print("ReceiveDone: ["); // DO NOT USE SINGLE QUOTE!!
+    Serial.print(radio.SENDERID, DEC);
+    Serial.print(", Node = ");
+    Serial.print(theData.node);
+    Serial.print(", Tran = ");
+    Serial.print(theData.tran);
+    Serial.print("] ");
+
+    Serial.print("   [RX_RSSI:");
+    Serial.print(radio.readRSSI());
+    Serial.print("]");
+
+    if (radio.ACKRequested())
+    {
+      radio.sendACK();
+      Serial.print(" - ACK sent");
+    }
+
+    Serial.println();
+    if ((theData.tran == 99) && (theData.node == NODEID)) resetT = 1;
+
+  }
+  //**delay(10);
+  //radio.send(uint8_t toAddress, const void* buffer, uint8_t bufferSize, bool requestACK)
+  radio.receiveDone();
+  //**radio.send(GATEWAYID, (const void*)(&theData), sizeof(theData), 0);
+  delay(5);
+  radio.sleep();
+  Serial.flush();
+  //Blink(LED, 1000);
+  //lastPeriod = currPeriod;
+
+  //sleep_mode();
+  //delay(59973);
+  //Serial.flush();
+  //  Sleepy::loseSomeTime(550500); // was 55000 / 55100
+  Sleepy::loseSomeTime(TRANSMITPERIOD);
+  //}
+}
+
+
+// *** End LOOP ***
+
+// function readTempVolts
+void readTempVolts()
+{
+  // call sensors.requestTemperatures() to issue a global temperature
+  // request to all devices on the bus
+  digitalWrite(ONE_WIRE_POW, HIGH);
+  Serial.print("Requesting temperatures...");
+  sensors.requestTemperatures(); // Send the command to get temperatures
+  Serial.println("DONE");
+  //digitalWrite(ONE_WIRE_POW, LOW);
+
+  // Loop through each device, print out temperature data
+  for (int i = 0; i < numberOfDevices; i++)
+  {
+    // Search the wire for address
+    if (sensors.getAddress(tempDeviceAddress, i))
+    {
+      // Output the device ID
+      Serial.print("Temperature for device: ");
+      Serial.println(i, DEC);
+
+      // It responds almost immediately. Let's print out the data
+      printTemperature(tempDeviceAddress); // Use a simple function to print out the data
+    }
+    //else ghost device! Check your power requirements and cabling
+
+  }
+  digitalWrite(ONE_WIRE_POW, LOW);
+  /*
+  Serial.print("Trans: ");
+  Serial.println(theData.tran);
+  Serial.print("Voltage: ");
+  Serial.println( readVcc(), DEC );
+  Serial.println("");
+  delay(100); // for serial was 100 then 5
+  */
+}
+
+
+void Blink(byte PIN, int DELAY_MS)
+{
+  pinMode(PIN, OUTPUT);
+  digitalWrite(PIN, HIGH);
+  delay(DELAY_MS);
+  digitalWrite(PIN, LOW);
+}
+
+// function to print the temperature for a device
+void printTemperature(DeviceAddress deviceAddress)
+{
+  // method 1 - slower
+  //Serial.print("Temp C: ");
+  //Serial.print(sensors.getTempC(deviceAddress));
+  //Serial.print(" Temp F: ");
+  //Serial.print(sensors.getTempF(deviceAddress)); // Makes a second call to getTempC and then converts to Fahrenheit
+
+  // method 2 - faster
+  float tempC = sensors.getTempC(deviceAddress);
+  Serial.print("Temp C: ");
+  Serial.print(tempC);
+  int tempC100 = tempC * 100;
+  //theData.value1 = tempC100;
+  Serial.print(" / ");
+  Serial.print(tempC100);
+  Serial.print(" Temp F: ");
+  Serial.println(DallasTemperature::toFahrenheit(tempC)); // Converts tempC to Fahrenheit
+}
+
+
+// function to print a device address
+void printAddress(DeviceAddress deviceAddress)
+{
+  for (uint8_t i = 0; i < 8; i++)
+  {
+    if (deviceAddress[i] < 16) Serial.print("0");
+    Serial.print(deviceAddress[i], HEX);
+  }
+}
+
+
+long readVcc() {
+  long result;
+  set_sleep_mode(SLEEP_MODE_ADC);
+  // Read 1.1V reference against AVcc
+  ADMUX = _BV(REFS0) | _BV(MUX3) | _BV(MUX2) | _BV(MUX1);
+  delay(2); // Wait for Vref to settle
+  ADCSRA |= _BV(ADSC); // Convert
+  while (bit_is_set(ADCSRA, ADSC));
+  result = ADCL;
+  result |= ADCH << 8;
+  result = 1126400L / result; // Back-calculate AVcc in mV
+  theData.batt = result;
+  //sleep_mode();
+  return result;
+}
+
+void calcT() {
+  digitalWrite(ONE_WIRE_POW, HIGH);
+  delay(5);
+  sensors.begin();
+  sensors.getAddress(tempDeviceAddress, 0);
+  sensors.setResolution(tempDeviceAddress, 12);
+  sensors.requestTemperatures();
+
+  tT0 = EV0;
+  float tempC = EV0;
+  tempC = sensors.getTempC(tempDeviceAddress);
+  digitalWrite(ONE_WIRE_POW, LOW);
+
+  if ((tempC < tMin) || (tempC > tMax)) {
+    tT0 = EV0;
+  } else {
+    tT0 = tempC * 100; // avoids dealing with rounding
+  }
+
+  if (tT0 != 999) {
+    if ((tT0 >= maxT) || (maxT == EV0)) {
+      maxT = tT0;
+    }
+    if ((tT0 <= minT) || (minT == EV0)) {
+      minT = tT0;
+    }
+  }
+
+  theData.value1 = tT0;
+
+  if (resetT == 1) {
+    maxT = tT0;
+    minT = tT0;
+    resetT = 0;
+    Serial.println("Temps reset");
+  }
+
+  theData.value3 = maxT;
+  theData.value2 = minT;
+  Serial.print("Temp / Min / Max: ");
+  Serial.print(tT0);
+  Serial.print(" / ");
+  Serial.print(minT);
+  Serial.print(" / ");
+  Serial.println(maxT);
+}
