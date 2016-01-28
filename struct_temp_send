@@ -74,7 +74,7 @@ void setup() {
   Serial.begin(SERIAL_BAUD);
   //randomSeed(analogRead(0));
   //NODEID = random(1,9);
-  Serial.println("Struct_temp_send_5  ... setup started ...");
+  Serial.println("Struct_temp_send_6  ... setup started ...");
   //Serial.print("Delay: ");
   //Serial.println(TRANSMITPERIOD);
   //pinMode(RADIOSW, OUTPUT);
@@ -190,7 +190,8 @@ void loop() {
     //**Serial.print("Sending struct (");
     //**Serial.print(sizeof(theData));
     //**Serial.print(" bytes) ... ");
-    if (radio.sendWithRetry(GATEWAYID, (const void*)(&theData), sizeof(theData)), 1)
+    //if (radio.sendWithRetry(GATEWAYID, (const void*)(&theData), sizeof(theData)), 1) // Causes blocks when clashing with 2nd radio ?
+    if (radio.sendWithRetry(GATEWAYID, (const void*)(&theData), sizeof(theData)), 0)
     //if (radio.send(GATEWAYID, (const void*)(&theData), sizeof(theData)), 0)  // block mem reset
     {
       Serial.println(" RF ok");
@@ -199,6 +200,8 @@ void loop() {
     else 
     {
       Serial.println(" RF not ok");
+      //int dt = random(0,3);
+      //delay(dt);
     }
 
 delay(60);  // 60 works; NOT = 20 // 40 //
