@@ -84,11 +84,11 @@ long lastPeriod = -1;
 // *** SETUP ***
 void setup() {
   Serial.begin(SERIAL_BAUD);
-  Serial.print("sDesc: ");
+  Serial.print("Software description: ");
   Serial.println(sDesc);
-  Serial.print("sVersion: ");
+  Serial.print("Software version: ");
   Serial.println(sVersion);
-  Serial.print("hVersion: ");
+  Serial.print("Hardware version: ");
   Serial.println(hVersion);
 
   //pinMode(RADIOSW, OUTPUT);
@@ -108,15 +108,14 @@ void setup() {
 
   pinMode(ONE_WIRE_POW, OUTPUT);
   digitalWrite(ONE_WIRE_POW, HIGH);
-  Serial.println("Dallas Temperature IC Control Library Demo");
 
   sensors.begin();
   numberOfDevices = sensors.getDeviceCount();
 
-  Serial.print("Locating devices...");
+  Serial.print("Locating DS18B20 devices... ");
   Serial.print("Found ");
   Serial.print(numberOfDevices, DEC);
-  Serial.println(" devices.");
+  Serial.println(" device/s.");
   Serial.print("Parasite power is: ");
   if (sensors.isParasitePowerMode()) Serial.println("ON");
   else Serial.println("OFF");
@@ -162,7 +161,7 @@ void loop() {
 #ifdef DEBUG_MIN
   Serial.print("Node = ");
   Serial.print(theData.node);
-  Serial.print(" [Tran = ");
+  Serial.print("; Tran = ");
   Serial.print(theData.tran);
   Serial.print("; Batt = ");
   Serial.print(theData.batt);
@@ -174,7 +173,7 @@ void loop() {
   Serial.print(theData.value3);
   Serial.print("; Value4 = ");
   Serial.print(theData.value4);
-  Serial.println(" ]");
+  Serial.println("");
 #endif
 
   if (radio.sendWithRetry(GATEWAYID, (const void*)(&theData), sizeof(theData)), 1)  // works??
