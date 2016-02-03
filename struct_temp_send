@@ -162,19 +162,19 @@ void loop() {
 #ifdef DEBUG_MIN
   Serial.print("[ Node = ");
   Serial.print(theData.node);
-  Serial.print(" Tran = ");
+  Serial.print("; Tran = ");
   Serial.print(theData.tran);
-  Serial.print(" Batt = ");
+  Serial.print("; Batt = ");
   Serial.print(theData.batt);
-  Serial.print(" Value1 = ");
+  Serial.print("; Value1 = ");
   Serial.print(theData.value1);
-  Serial.print(" Value2 = ");
+  Serial.print("; Value2 = ");
   Serial.print(theData.value2);
-  Serial.print(" Value3 = ");
+  Serial.print("; Value3 = ");
   Serial.print(theData.value3);
-  Serial.print(" Value4 = ");
-  Serial.println(theData.value4);
-  Serial.print(" ]");
+  Serial.print("; Value4 = ");
+  Serial.print(theData.value4);
+  Serial.println(" ]");
 #endif
 
   if (radio.sendWithRetry(GATEWAYID, (const void*)(&theData), sizeof(theData)), 1)  // works??
