@@ -5,7 +5,12 @@
 #include <JeeLib.h>
 #include <avr/sleep.h>
 
-#define DEBUG_ON
+#define sDesc "Falco Manager Node"
+#define sVersion "v0.5.1"
+#define hVersion "v0.5.0"
+
+//#define DEBUG_ON
+#define DEBUG_MIN
 
 #define ONE_WIRE_BUS 8
 #define ONE_WIRE_POW 9
@@ -79,11 +84,13 @@ long lastPeriod = -1;
 // *** SETUP ***
 void setup() {
   Serial.begin(SERIAL_BAUD);
-  //randomSeed(analogRead(0));
-  //NODEID = random(1,9);
-  Serial.println("Struct_temp_send_7  ... setup started ...");
-  //Serial.print("Delay: ");
-  //Serial.println(TRANSMITPERIOD);
+  Serial.print("sDesc: ");
+  Serial.println(sDesc);
+  Serial.print("sVersion: ");
+  Serial.println(sVersion);
+  Serial.print("hVersion: ");
+  Serial.println(sVersion);
+
   //pinMode(RADIOSW, OUTPUT);
   //digitalWrite(RADIOSW, HIGH);
   //delay(100);
@@ -145,27 +152,13 @@ void setup() {
 // *** LOOP ***
 // *** LOOP ***
 void loop() {
-
-  //  radio.sleep();
-  //  if (waitForRF == 1){
-  //      waitForRF = 0;
-  //      Serial.flush();
-  //      Sleepy::loseSomeTime(59973);
-  //  }
-
-  //int currPeriod = millis() / TRANSMITPERIOD;
-
-  //if (currPeriod != lastPeriod)
-  //Serial.println();
-
-  //Serial.println( readVcc(), DEC );
+  //readTempVolts();
   readVcc();
   calcT();
 
-  //readTempVolts();
-
   //fill in the struct with new values
   theData.node = NODEID;
+#ifdef DEBUG_MIN
   Serial.print("Node = ");
   Serial.print(theData.node);
   Serial.print("; ");
@@ -183,28 +176,12 @@ void loop() {
   Serial.print("; ");
   Serial.print("Value3 = ");
   Serial.print(theData.value3);
-  Serial.println(";");
-  //Serial.print("; theData.value4 = ");
-  //Serial.println(theData.value4);
+  Serial.print(";");
+  Serial.print("; theData.value4 = ");
+  Serial.println(theData.value4);
+#endif
 
-  //Blink(LED, 1000);
-  //digitalWrite(RADIOSW, LOW);
-  //delay(10);
-  //digitalWrite(RADIOSW, HIGH);
-  //Serial.println("Radio on ...");
-  //delay(1000);
-  //radio.initialize(FREQUENCY, NODEID, NETWORKID);
-  //radio.setHighPower(); //uncomment only for RFM69HW!
-  //radio.encrypt(KEY);
-  //**delay(10);
-  //**Serial.print("Sending struct (");
-  //**Serial.print(sizeof(theData));
-  //**Serial.print(" bytes) ... ");
-  //if (radio.sendWithRetry(GATEWAYID, (const void*)(&theData), sizeof(theData)), 1) // Causes blocks when clashing with 2nd radio ?
-  //if (radio.sendWithRetry(GATEWAYID, (const void*)(&theData), sizeof(theData)), 1)
-  //radio.sendWithRetry(GATEWAYID, (const void*)(&theData), sizeof(theData));  // block mem reset
-  //radio.sendWithRetry(GATEWAYID, (const void*)(&theData), sizeof(theData), 1);  // block mem reset
-  if (radio.sendWithRetry(GATEWAYID, (const void*)(&theData), sizeof(theData)), 1)  // block mem reset
+  if (radio.sendWithRetry(GATEWAYID, (const void*)(&theData), sizeof(theData)), 1)  // works??
   {
     Serial.println(" RF ok");
   }
@@ -231,110 +208,41 @@ void loop() {
   //Serial.println(theData.tran);
 
   while (rfC < rfCDelay) {
-    //radio.sendACK();
-    //  delay(60);  // 60 works; NOT = 20 // 40 //
-    // MUST HAVE DELAY to allow temp reset message to be received.
-    // If delay too long then ACK not sent in time.
     if (radio.receiveDone()) // ONLY works if adequate delay else get data from previous transmission??/
     {
-    //theData.tran = 0;
-    //theData.node = 0;
     theData = *(Payload*)radio.DATA;
-    //int sID = radio.SENDERID; // does not work!!
-
-    //Serial.println(radio.receiveDone()); seems to cause delay
-
-    //if (radio.ACKRequested())  // never seems to be called
-    //{
-    //radio.sendACK();
-    //Serial.println(" -> ACK sent");
-    //}
-
-    //theData = *(Payload*)radio.DATA;
-    //Serial.print(" ReceiveDone: [SENDERID = "); // DO NOT USE SINGLE QUOTE!!
-    //Serial.print(radio.SENDERID, DEC);
-    //Serial.print(", Node = ");
-    //Serial.print(theData.node);
-    //Serial.print(", Tran = ");
-    //Serial.print(theData.tran);
-    //Serial.print("] ");
-
-    //**Serial.print("   [RX_RSSI:");
-    //**Serial.print(radio.readRSSI());
-    //**Serial.print("]");
-
-    //if (radio.ACKRequested())
-    //{
-    //radio.sendACK();
-    //Serial.print(" - ACK sent");
-    //}
-
-    //Serial.println();
- 
     if ((theData.tran == 3) && (theData.node == NODEID))
     {
-      radio.SENDERID = NODEID; // makes not difference
-      //radio.receiveDone();
       radio.sendACK();
-      //radio.receiveDone();
       resetT = 0;
-      //radio.sendACK();
-      //Serial.println(radio.receiveDone()); // seems to cause issue
 #ifdef DEBUG_ON
       Serial.print(" rfC delay = ");
       Serial.print(rfDelay1 + (rfC * rfDelay2));
       Serial.println("ms -> ACK (tran = 3)");
-      //radio.sendACK();
-      Serial.print(" Received data: [SENDERID = "); // DO NOT USE SINGLE QUOTE!!
-      Serial.print(radio.SENDERID, DEC); // does not work returns 0
-      //Serial.print(sID);
-      Serial.print(", Node = ");
+      Serial.print(" Received data: [NODE = ");
       Serial.print(theData.node);
       Serial.print(", Tran = ");
       Serial.print(theData.tran);
       Serial.println("] ");
 #endif
-      //radio.receiveDone();
-      //theData.tran = 0;
-      //theData.node = 0;
-      //Serial.print(" Node = ");
-      //Serial.print(theData.node);
-      //Serial.print(", Tran = ");
-      //Serial.println(theData.tran);
       break;
     }
 
  
     if ((theData.tran == 99) && (theData.node == NODEID))
     {
-      radio.SENDERID = NODEID;  // makes not difference
-      //radio.receiveDone();
       radio.sendACK();
-      //radio.receiveDone();
       resetT = 1;
-      //radio.sendACK();
-      //Serial.println(radio.receiveDone()); // seems to cause issue
 #ifdef DEBUG_ON
       Serial.print(" rfC delay = ");
       Serial.print(rfDelay1 + (rfC * rfDelay2));
       Serial.println("ms -> ACK sent (tran 99)");
-      //radio.sendACK();
-      Serial.print(" Received data: [SENDERID = "); // DO NOT USE SINGLE QUOTE!!
-      Serial.print(radio.SENDERID, DEC); // does not work returns 0
-      //Serial.print(sID);
-      Serial.print(", Node = ");
+      Serial.print(" Received data: [NODE = ");
       Serial.print(theData.node);
       Serial.print(", Tran = ");
       Serial.print(theData.tran);
       Serial.println("] ");
 #endif
-      //radio.receiveDone();
-      //theData.tran = 0;
-      //theData.node = 0;
-      //Serial.print(" Node = ");
-      //Serial.print(theData.node);
-      //Serial.print(", Tran = ");
-      //Serial.println(theData.tran);
       break;
     }
 
@@ -342,74 +250,20 @@ void loop() {
     }
     rfC++;
   }
-  //theData.tran = 0;
-  //theData.node = 0;
-  //Serial.print(" Node = ");
-  //Serial.print(theData.node);
-  //Serial.print(", Tran = ");
-  //Serial.println(theData.tran);
-  //delay(100);
-  //radio.send(uint8_t toAddress, const void* buffer, uint8_t bufferSize, bool requestACK)
-  //radio.receiveDone();  // may be needed to ensure 1st loop works - seems to make no diff??
-  //**radio.send(GATEWAYID, (const void*)(&theData), sizeof(theData), 0);
-  //delay(5);
-  //radio.sleep();
+  
   Serial.flush();
   radio.sleep();
-  //Blink(LED, 1000);
-  //lastPeriod = currPeriod;
-
-  //sleep_mode();
-  //delay(59973);
-  //Serial.flush();
-  //  Sleepy::loseSomeTime(550500); // was 55000 / 55100
   Sleepy::loseSomeTime(TRANSMITPERIOD);
   //}
 }
 
-
+// *** End LOOP ***
+// *** End LOOP ***
 // *** End LOOP ***
 
-// function readTempVolts
-// DELETE
-void x_readTempVolts()
-{
-  // call sensors.requestTemperatures() to issue a global temperature
-  // request to all devices on the bus
-  digitalWrite(ONE_WIRE_POW, HIGH);
-  Serial.print("Requesting temperatures...");
-  sensors.requestTemperatures(); // Send the command to get temperatures
-  Serial.println("DONE");
-  //digitalWrite(ONE_WIRE_POW, LOW);
-
-  // Loop through each device, print out temperature data
-  for (int i = 0; i < numberOfDevices; i++)
-  {
-    // Search the wire for address
-    if (sensors.getAddress(tempDeviceAddress, i))
-    {
-      // Output the device ID
-      Serial.print("Temperature for device: ");
-      Serial.println(i, DEC);
-
-      // It responds almost immediately. Let's print out the data
-      x_printTemperature(tempDeviceAddress); // Use a simple function to print out the data
-    }
-    //else ghost device! Check your power requirements and cabling
-
-  }
-  digitalWrite(ONE_WIRE_POW, LOW);
-  /*
-  Serial.print("Trans: ");
-  Serial.println(theData.tran);
-  Serial.print("Voltage: ");
-  Serial.println( readVcc(), DEC );
-  Serial.println("");
-  delay(100); // for serial was 100 then 5
-  */
-}
 
 
+// FUNCTION Blink (blink a led)
 void Blink(byte PIN, int DELAY_MS)
 {
   pinMode(PIN, OUTPUT);
@@ -418,30 +272,9 @@ void Blink(byte PIN, int DELAY_MS)
   digitalWrite(PIN, LOW);
 }
 
-// function to print the temperature for a device
-// DELETE
-void x_printTemperature(DeviceAddress deviceAddress)
-{
-  // method 1 - slower
-  //Serial.print("Temp C: ");
-  //Serial.print(sensors.getTempC(deviceAddress));
-  //Serial.print(" Temp F: ");
-  //Serial.print(sensors.getTempF(deviceAddress)); // Makes a second call to getTempC and then converts to Fahrenheit
-
-  // method 2 - faster
-  float tempC = sensors.getTempC(deviceAddress);
-  Serial.print("Temp C: ");
-  Serial.print(tempC);
-  int tempC100 = tempC * 100;
-  //theData.value1 = tempC100;
-  Serial.print(" / ");
-  Serial.print(tempC100);
-  Serial.print(" Temp F: ");
-  Serial.println(DallasTemperature::toFahrenheit(tempC)); // Converts tempC to Fahrenheit
-}
 
 
-// function to print a device address
+// FUNCTION printAddress (print a DS18B20 device address)
 void printAddress(DeviceAddress deviceAddress)
 {
   for (uint8_t i = 0; i < 8; i++)
@@ -452,6 +285,7 @@ void printAddress(DeviceAddress deviceAddress)
 }
 
 
+// FUNCTION readVcc (read the battery voltage)
 long readVcc() {
   long result;
   set_sleep_mode(SLEEP_MODE_ADC);
@@ -468,6 +302,9 @@ long readVcc() {
   return result;
 }
 
+
+
+// FUNCTION calcT (calculate temperature and set max and min etc)
 void calcT() {
   digitalWrite(ONE_WIRE_POW, HIGH);
   delay(5);
@@ -502,16 +339,20 @@ void calcT() {
     maxT = tT0;
     minT = tT0;
     resetT = 0;
+    #ifdef DEBUG_MIN
     Serial.println(" **** Temps reset ......");
+    #endif
   }
 
   theData.tran = 2;
   theData.value3 = maxT;
   theData.value2 = minT;
+  #ifdef DEBUG_ON
   Serial.print("\nTemp / Min / Max: ");
   Serial.print(tT0);
   Serial.print(" / ");
   Serial.print(minT);
   Serial.print(" / ");
   Serial.println(maxT);
+  #endif
 }
