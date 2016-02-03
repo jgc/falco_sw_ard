@@ -160,37 +160,34 @@ void loop() {
   //fill in the struct with new values
   theData.node = NODEID;
 #ifdef DEBUG_MIN
-  Serial.print("Node = ");
+  Serial.print("[ Node = ");
   Serial.print(theData.node);
-  Serial.print("; ");
-  Serial.print("Tran = ");
+  Serial.print(" Tran = ");
   Serial.print(theData.tran);
-  Serial.print("; ");
-  Serial.print("Batt = ");
+  Serial.print(" Batt = ");
   Serial.print(theData.batt);
-  Serial.print("; ");
-  Serial.print("Value1 = ");
+  Serial.print(" Value1 = ");
   Serial.print(theData.value1);
-  Serial.print("; ");
-  Serial.print("Value2 = ");
+  Serial.print(" Value2 = ");
   Serial.print(theData.value2);
-  Serial.print("; ");
-  Serial.print("Value3 = ");
+  Serial.print(" Value3 = ");
   Serial.print(theData.value3);
-  Serial.print(";");
-  Serial.print("; theData.value4 = ");
+  Serial.print(" Value4 = ");
   Serial.println(theData.value4);
+  Serial.print(" ]");
 #endif
 
   if (radio.sendWithRetry(GATEWAYID, (const void*)(&theData), sizeof(theData)), 1)  // works??
   {
+    #ifdef DEBUG_ON
     Serial.println(" RF ok");
+    #endif
   }
   else
   {
+    #ifdef DEBUG_MIN
     Serial.println(" RF not ok");
-    //int dt = random(0,3);
-    //delay(dt);
+    #endif
   }
 
   //radio.receiveDone(); // not sure if this will help - makes no difference
@@ -202,11 +199,6 @@ void loop() {
 
   theData.tran = 0;
   theData.node = 0;
-
-  //Serial.print(" Node = ");
-  //Serial.print(theData.node);
-  //Serial.print(", Tran = ");
-  //Serial.println(theData.tran);
 
   while (rfC < rfCDelay) {
     if (radio.receiveDone()) // ONLY works if adequate delay else get data from previous transmission??/
