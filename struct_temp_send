@@ -34,7 +34,7 @@ ISR(WDT_vect) {
 
 volatile int f_timer = 0;
 
-#define NODEID      4
+#define NODEID      5
 //uint8_t NODEID = 0;
 #define NETWORKID   100
 #define GATEWAYID   31
@@ -160,9 +160,9 @@ void loop() {
   //fill in the struct with new values
   theData.node = NODEID;
 #ifdef DEBUG_MIN
-  Serial.print("[ Node = ");
+  Serial.print("Node = ");
   Serial.print(theData.node);
-  Serial.print("; Tran = ");
+  Serial.print(" [Tran = ");
   Serial.print(theData.tran);
   Serial.print("; Batt = ");
   Serial.print(theData.batt);
@@ -333,7 +333,7 @@ void calcT() {
     minT = tT0;
     resetT = 0;
     #ifdef DEBUG_MIN
-    Serial.println(" **** Temps reset ......");
+    Serial.println(" -> Max / Min reset");
     #endif
   }
 
