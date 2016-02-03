@@ -89,7 +89,7 @@ void setup() {
   Serial.print("sVersion: ");
   Serial.println(sVersion);
   Serial.print("hVersion: ");
-  Serial.println(sVersion);
+  Serial.println(hVersion);
 
   //pinMode(RADIOSW, OUTPUT);
   //digitalWrite(RADIOSW, HIGH);
@@ -129,17 +129,18 @@ void setup() {
       Serial.print(i, DEC);
       Serial.print(" with address: ");
       printAddress(tempDeviceAddress);
-      Serial.println();
+      Serial.println("");
       Serial.print("Setting resolution to ");
       Serial.println(TEMPERATURE_PRECISION, DEC);
       sensors.setResolution(tempDeviceAddress, TEMPERATURE_PRECISION);
       Serial.print("Resolution actually set to: ");
-      Serial.print(sensors.getResolution(tempDeviceAddress), DEC);
-      Serial.println();
+      Serial.println(sensors.getResolution(tempDeviceAddress), DEC);
+      Serial.println("");
     } else {
       Serial.print("Found ghost device at ");
       Serial.print(i, DEC);
-      Serial.print(" but could not detect address. Check power and cabling");
+      Serial.println(" but could not detect address. Check power and cabling");
+      Serial.println("");
     }
   }
 
