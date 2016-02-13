@@ -4,9 +4,10 @@
 #include <DallasTemperature.h>
 #include <JeeLib.h>
 #include <avr/sleep.h>
+#include <EEPROM.h>
 
 #define sDesc "Falco Manager Node"
-#define sVersion "v0.5.1"
+#define sVersion "v0.5.3"
 #define hVersion "v0.5.0"
 
 //#define DEBUG_ON
@@ -77,7 +78,8 @@ typedef struct {
 Payload theData;
 
 long lastPeriod = -1;
-
+bool addNode = 0;
+char setupData[10];
 
 // *** SETUP ***
 // *** SETUP ***
@@ -102,12 +104,84 @@ void setup() {
   sprintf(buff, "\nTransmitting at %d Mhz...", FREQUENCY == RF69_433MHZ ? 433 : FREQUENCY == RF69_868MHZ ? 868 : 915);
   Serial.println(buff);
 
+
+      byte temperature =  radio.readTemperature(-1); // -1 = user cal factor, adjust for correct ambient
+      byte fTemp = 1.8 * temperature + 32; // 9/5=1.8
+      Serial.print( "Radio Temp is ");
+      Serial.print(temperature);
+      Serial.print("C, ");
+      Serial.print(fTemp); //converting to F loses some resolution, obvious when C is on edge between 2 values (ie 26C=78F, 27C=80F)
+      Serial.println('F');
+      
   cli();
   CLKPR = bit(CLKPCE);
   sei();
 
+  pinMode(3, INPUT);
   pinMode(ONE_WIRE_POW, OUTPUT);
   digitalWrite(ONE_WIRE_POW, HIGH);
+ 
+  addNode = digitalRead(3);
+  Serial.print("\naddNode = ");
+  Serial.println(addNode);
+  if (addNode == 0) Serial.println("Digtal 3 = LOW\n");
+  if (addNode == 1) Serial.println("Digtal 3 = HIGH\n");
+  
+  String KEYa = "sampleEncryptKey";
+  String KEYx0 = "ampleEncryptKey";
+  String KEYx = char('s') + KEYx0;
+  
+  if (String(KEY) == KEYa)
+    Serial.println("Keys ok");
+  else 
+    Serial.println("keys NOT ok");
+  
+  
+  if (String(KEY) == KEYx)
+    Serial.println("Keyx ok");
+  else 
+    Serial.println("keyx NOT ok");
+  
+  char lo = 'A';
+  char hi = 'B';
+  uint16_t xn = lo | uint16_t(hi) << 8;  // unsigned
+  char lo2 = xn & 0xFF;
+  char hi2 = xn >> 8;
+  Serial.println(char(lo));
+  Serial.println(char(hi));
+  Serial.println(String(xn));
+  Serial.println(char(lo2));
+  Serial.println(char(hi2));
+  
+  Serial.println("Node and network data");
+  for (int i = 0; i < 2; i++)
+  {
+    //char value = EEPROM.read(i);
+    //setupData[i] = value;
+    setupData[i] = EEPROM.read(i);
+    Serial.print(i);
+    Serial.print(": [");
+    Serial.print(setupData[i]);
+    Serial.print("|");
+    Serial.print(char(setupData[i]));
+    Serial.println("]");
+  }
+
+  Serial.println("Other data");
+  for (int i = 2; i < 18; i++)
+  {
+    //char value = EEPROM.read(i);
+    //setupData[i] = value;
+    setupData[i] = EEPROM.read(i);
+    Serial.print(i);
+    Serial.print(": [");
+    Serial.print(setupData[i]);
+    Serial.print("|");
+    Serial.print(char(setupData[i]));
+    Serial.println("]");
+  }
+  
+  Serial.println();
 
   sensors.begin();
   numberOfDevices = sensors.getDeviceCount();
@@ -158,8 +232,15 @@ void loop() {
 
   //fill in the struct with new values
   theData.node = NODEID;
-#ifdef DEBUG_MIN
-  Serial.print("Node = ");
+  #ifdef DEBUG_MIN
+  unsigned long msc = millis();
+  uint16_t msSec = msc / 60000;
+  uint16_t ms = msc % 60000; 
+  Serial.print("Millis = ");
+  Serial.print(msSec);
+  Serial.print(" ");
+  Serial.print(ms);
+  Serial.print(": Node = ");
   Serial.print(theData.node);
   Serial.print("; Tran = ");
   Serial.print(theData.tran);
@@ -174,7 +255,7 @@ void loop() {
   Serial.print("; Value4 = ");
   Serial.print(theData.value4);
   Serial.println("");
-#endif
+  #endif
 
   if (radio.sendWithRetry(GATEWAYID, (const void*)(&theData), sizeof(theData)), 1)  // works??
   {
@@ -198,16 +279,50 @@ void loop() {
 
   theData.tran = 0;
   theData.node = 0;
-
+  
+  byte packetCount = 0;
+  
   while (rfC < rfCDelay) {
     if (radio.receiveDone()) // ONLY works if adequate delay else get data from previous transmission??/
     {
     theData = *(Payload*)radio.DATA;
+
+    Serial.print("#[");
+    Serial.print(++packetCount);
+    Serial.print(']');
+    Serial.print('[');
+    Serial.print(radio.SENDERID, DEC);
+    Serial.print("] ");
+    //if (!promiscuousMode)
+    //{
+      Serial.print("to [");
+      Serial.print(radio.TARGETID, DEC);
+      Serial.print("] ");
+    //}
+    for (byte i = 0; i < radio.DATALEN; i++)
+    {
+    Serial.print("[");
+    Serial.print(i);
+    Serial.print(":");
+      Serial.print((char)radio.DATA[i]);
+    Serial.print("|");
+    char x = (char)radio.DATA[i];
+    Serial.print(x, DEC);
+    Serial.print("] ");
+    }
+    Serial.print(" [RX_RSSI:");
+    Serial.print(radio.RSSI);
+    Serial.print("]");
+    
+    Serial.print("[DATALEN:");
+    Serial.print(radio.DATALEN);
+    Serial.println("]");
+
     if ((theData.tran == 3) && (theData.node == NODEID))
     {
       radio.sendACK();
       resetT = 0;
-#ifdef DEBUG_ON
+      #ifdef DEBUG_MIN
       Serial.print(" rfC delay = ");
       Serial.print(rfDelay1 + (rfC * rfDelay2));
       Serial.println("ms -> ACK (tran = 3)");
@@ -215,26 +330,35 @@ void loop() {
       Serial.print(theData.node);
       Serial.print(", Tran = ");
       Serial.print(theData.tran);
+      Serial.print(", Network = ");
+      Serial.print(theData.batt);
+      Serial.print(", PW1 = ");
+      Serial.print(theData.value1);
+      Serial.print(", PW2 = ");
+      Serial.print(theData.value2);
+      Serial.print(", PW3 = ");
+      Serial.print(theData.value3);
+      Serial.print(", PW4 = ");
+      Serial.print(theData.value4);
       Serial.println("] ");
-#endif
+      #endif
       break;
     }
-
  
     if ((theData.tran == 99) && (theData.node == NODEID))
     {
       radio.sendACK();
       resetT = 1;
-#ifdef DEBUG_ON
+      #ifdef DEBUG_ON
       Serial.print(" rfC delay = ");
       Serial.print(rfDelay1 + (rfC * rfDelay2));
       Serial.println("ms -> ACK sent (tran 99)");
       Serial.print(" Received data: [NODE = ");
       Serial.print(theData.node);
       Serial.print(", Tran = ");
-      Serial.print(theData.tran);
+      Serial.print(theData.tran);    
       Serial.println("] ");
-#endif
+      #endif
       break;
     }
 
