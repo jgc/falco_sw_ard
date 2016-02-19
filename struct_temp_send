@@ -20,7 +20,7 @@ EEPROM addresses
 */
 
 //#define DEBUG_ON
-#define DEBUG_MIN
+//#define DEBUG_MIN
 
 #define ONE_WIRE_BUS 8
 #define ONE_WIRE_POW 9
@@ -107,14 +107,14 @@ void setup() {
   Serial.println(hVersion);
   
   #ifndef DEBUG_ON
-  Serial.print("\n ... DEBUG_ON output disabled");
+  Serial.print("\nDEBUG_ON output disabled");
   #else
-  Serial.print("\n ... DEBUG_ON output enabled");
+  Serial.print("\nDEBUG_ON output enabled");
   #endif
   #ifndef DEBUG_MIN
-  Serial.println("\n ... DEBUG_MIN output disabled");
+  Serial.println("\nDEBUG_MIN output disabled");
   #else
-  Serial.println("\n ... DEBUG_MIN output enabled");
+  Serial.println("\nDEBUG_MIN output enabled");
   #endif  
 
   pinMode(3, INPUT);
@@ -473,23 +473,61 @@ void initializeRF()
 
 void saveRFConfig()
 {
+  #ifdef DEBUG_MIN
   Serial.println("\n SAVE TO EEPROM");
+  #endif
   int addr1 = 2;
   int addr2 = 3;  
-  EEPROM.write(addr1, theVData.v1[0]); // node
-  EEPROM.write(addr2, theVData.v2[0]);  // network
+  if (EEPROM.read(addr1) != theVData.v1[0])
+  {
+    EEPROM.write(addr1, theVData.v1[0]); // node
+    #ifdef DEBUG_MIN
+    Serial.print(addr1);
+    Serial.print(" ");
+    Serial.println(theVData.v1[0]);
+    #endif
+  }
+  if (EEPROM.read(addr2) != theVData.v2[0])
+  {
+    EEPROM.write(addr2, theVData.v2[0]);  // network
+    #ifdef DEBUG_MIN
+    Serial.print(addr2);
+    Serial.print(" ");
+    Serial.println(theVData.v2[0]);
+    #endif
+  }
+
+  #ifdef DEBUG_ON
+  Serial.println(" KEY ");
+  #endif
   for (int i = 1; i < 9; i++)
   {
     int16_t sKey = theVData.v2[i];
     char lo2 = sKey & 0xFF;
     char hi2 = sKey >> 8;
     addr1 = addr1 + 2;
-    addr2 = addr2 + 2;      
-    EEPROM.write(addr1, lo2);
-    EEPROM.write(addr2, hi2);
+    addr2 = addr2 + 2;    
+    if (EEPROM.read(addr1) != lo2)
+    {
+      EEPROM.write(addr1, lo2);
+      #ifdef DEBUG_MIN
+      Serial.print(addr1);
+      Serial.print(" ");
+      Serial.println(lo2);
+      #endif
+    }
+    if (EEPROM.read(addr2) != hi2)
+    {
+      EEPROM.write(addr2, hi2);
+      #ifdef DEBUG_MIN
+      Serial.print(addr2);
+      Serial.print(" ");
+      Serial.println(hi2);
+      #endif
+    }
     //Serial.print("i | addr1 | addr2 ");
-    Serial.print(i);
-    Serial.print(" | ");
+    #ifdef DEBUG_ON
+    Serial.print(" ");
     Serial.print(addr1);
     Serial.print(" | ");
     Serial.print(addr2);
@@ -497,6 +535,7 @@ void saveRFConfig()
     Serial.print(lo2);
     Serial.print(" | ");
     Serial.println(hi2);
+    #endif
   }
 }
 
