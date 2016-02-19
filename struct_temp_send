@@ -7,7 +7,7 @@
 #include <EEPROM.h>
 
 #define sDesc "Falco Manager Node"
-#define sVersion "v0.5.5"
+#define sVersion "v0.5.6"
 #define hVersion "v0.5.0"
 
 /*
