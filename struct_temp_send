@@ -20,7 +20,7 @@ EEPROM addresses
 */
 
 //#define DEBUG_ON
-//#define DEBUG_MIN
+#define DEBUG_MIN
 
 #define ONE_WIRE_BUS 8
 #define ONE_WIRE_POW 9
@@ -261,26 +261,32 @@ void loop() {
     //if ((theVData.v1[1] == 3) && (theVData.v1[0] == NODEID)) // tran = 3
     if ((theVData.v1[1] == 3) && (theVData.v1[0] == nodeIDRF)) // tran = 3
     {
+      Serial.print("\n - tran 3 loop");
       prDataIn3();
+      Serial.print("\n - tran 3 loop end");
       break;
     }
  
     //if ((theVData.v1[1] == 90) && (theVData.v1[0] == NODEID)) // tran = 90
     if ((theVData.v1[1] == 90) && (addNode == 1)) // tran = 90
     {
+      Serial.print("\n - tran 90 loop");
       saveRFConfig();
       prDataIn90();
       addNode = 0; //moved to end so new temp sent immediately
       noWait = 1;
       initializeRF();
+      Serial.print("\n - tran 90 loop end");
       break;
     }
 
     //if ((theVData.v1[1] == 99) && (theVData.v1[0] == NODEID)) // tran = 99
     if ((theVData.v1[1] == 99) && (theVData.v1[0] == nodeIDRF)) // tran = 99
     {
+      Serial.print("\n - tran 99 loop");
       resetT = 1;
       prDataIn99();
+      Serial.print("\n - tran 99 loop");
       break;
     }
 
