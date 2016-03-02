@@ -7,7 +7,7 @@
 #include <EEPROM.h>
 
 #define sDesc "Falco Manager Node"
-#define sVersion "v0.5.6"
+#define sVersion "v0.5.8"
 #define hVersion "v0.5.0"
 
 /*
@@ -20,7 +20,8 @@ EEPROM addresses
 */
 
 //#define DEBUG_ON
-#define DEBUG_MIN
+//#define DEBUG_VMIN
+//#define DEBUG_MIN
 
 #define ONE_WIRE_BUS 8
 #define ONE_WIRE_POW 9
@@ -86,9 +87,9 @@ int networkIDRF = NETWORKID_SU;
 char keyRF[17];
 //char setupData[10];
 byte packetCount = 0;
-int rfDelay1 = 400;
-int rfDelay2 = 10;
-int rfCDelay = 60;
+int rfDelay1 = 0; // was 400
+int rfDelay2 = 1; // was 10
+int rfCDelay = 400; //was 60 then 600
 int rfC = 0; 
 byte noWait = 0;
 
@@ -99,7 +100,7 @@ byte noWait = 0;
 // *** SETUP ***
 void setup() {
   Serial.begin(SERIAL_BAUD);
-  Serial.print("Software description: ");
+  Serial.print("\nSoftware description: ");
   Serial.println(sDesc);
   Serial.print("Software version: ");
   Serial.println(sVersion);
@@ -111,6 +112,11 @@ void setup() {
   #else
   Serial.print("\nDEBUG_ON output enabled");
   #endif
+  #ifndef DEBUG_VMIN
+  Serial.print("\nDEBUG_VMIN output disabled");
+  #else
+  Serial.print("\nDEBUG_VMIN output enabled");
+  #endif  
   #ifndef DEBUG_MIN
   Serial.println("\nDEBUG_MIN output disabled");
   #else
@@ -121,6 +127,9 @@ void setup() {
   pinMode(ONE_WIRE_POW, OUTPUT);
   digitalWrite(ONE_WIRE_POW, HIGH);
  
+  //FIX
+  if (EEPROM.read(2) != 7)
+    EEPROM.write(2, 7); // node
   
   addNode = digitalRead(3);
   #ifdef DEBUG_ON
@@ -144,6 +153,7 @@ void setup() {
   
   cli();
   CLKPR = bit(CLKPCE);
+  //CLKPR = 1; // div 2, i.e. slow down to 8 MHz // affects Serial Power management?
   sei();
   
   sensors.begin();
@@ -231,7 +241,8 @@ void loop() {
   }
 
   //radio.receiveDone(); // not sure if this will help - makes no difference
-  delay(rfDelay1);
+  //delay(rfDelay1);
+  //Sleepy::loseSomeTime(rfDelay1);
   rfC = 0;
   packetCount = 0;
 
@@ -261,50 +272,61 @@ void loop() {
     //if ((theVData.v1[1] == 3) && (theVData.v1[0] == NODEID)) // tran = 3
     if ((theVData.v1[1] == 3) && (theVData.v1[0] == nodeIDRF)) // tran = 3
     {
-      Serial.print("\n - tran 3 loop");
+      //Serial.print("\n - tran 3 - normal");
       prDataIn3();
-      Serial.print("\n - tran 3 loop end");
+      //Serial.print("\n - tran 3 - normal end");
       break;
     }
  
     //if ((theVData.v1[1] == 90) && (theVData.v1[0] == NODEID)) // tran = 90
     if ((theVData.v1[1] == 90) && (addNode == 1)) // tran = 90
     {
-      Serial.print("\n - tran 90 loop");
+      //Serial.print("\n - tran 90 - add node");
       saveRFConfig();
       prDataIn90();
       addNode = 0; //moved to end so new temp sent immediately
-      noWait = 1;
+      //noWait = 1; // allows for an immediate temperature send
       initializeRF();
-      Serial.print("\n - tran 90 loop end");
+      //Serial.print("\n - tran 90 - add node end");
       break;
     }
 
     //if ((theVData.v1[1] == 99) && (theVData.v1[0] == NODEID)) // tran = 99
     if ((theVData.v1[1] == 99) && (theVData.v1[0] == nodeIDRF)) // tran = 99
     {
-      Serial.print("\n - tran 99 loop");
+      //Serial.print("\n - tran 99 - reset");
       resetT = 1;
       prDataIn99();
-      Serial.print("\n - tran 99 loop");
+      //Serial.print("\n - tran 99 - reset end");
       break;
     }
 
+    /*
     if (rfC < rfCDelay) delay(rfDelay2);
+    */
     }
+    //Sleepy::loseSomeTime(rfDelay2);
+    delay(rfDelay2);
     rfC++;
   }
   
+  int actualDelay = rfDelay1 + (rfC * rfDelay2);
+  //Serial.print("\n - rf delay = ");
+  //Serial.println(actualDelay);
+  theVData.v2[8] = actualDelay;
   Serial.flush();
 
   if (noWait == 1)
   {
     noWait = 0;
-    delay(10000);  //?
+    Sleepy::loseSomeTime(500);
+    //delay(10000);  //?
   } 
-  else 
+  //else
+  if (noWait == 0)
   {
     radio.sleep();
+    //sleep_mode();
     Sleepy::loseSomeTime(TRANSMITPERIOD);
   }
   //}
@@ -549,6 +571,7 @@ void saveRFConfig()
 
 void prDataOut()
 {
+  #ifdef DEBUG_VMIN
   unsigned long msc = millis();
   uint16_t msSec = msc / 60000;
   uint16_t ms = msc % 60000; 
@@ -556,14 +579,17 @@ void prDataOut()
   Serial.print(msSec);
   Serial.print(" Millisec: ");
   Serial.print(ms);
-  #ifdef DEBUG_MIN
   Serial.print(": addNode = ");
   Serial.print(addNode);
   Serial.print(": Node = ");
   Serial.print(theVData.v1[0]);
-  Serial.println(";");
-  Serial.print(" Tran = ");
+  Serial.print("; Tran = ");
   Serial.print(theVData.v1[1]);
+  Serial.print("; rfDelay = ");
+  Serial.print(theVData.v2[8]);
+  #endif
+  #ifdef DEBUG_MIN
+  Serial.println(";");
   Serial.print("; Batt = ");
   Serial.print(theVData.v2[0]);
   Serial.print("; Value1 = ");
