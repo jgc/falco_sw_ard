@@ -7,7 +7,7 @@
 #include <EEPROM.h>
 
 #define sDesc "Falco Manager Node"
-#define sVersion "v0.5.8"
+#define sVersion "v0.5.9"
 #define hVersion "v0.5.0"
 
 /*
@@ -18,6 +18,8 @@ EEPROM addresses
 3 = Network
 4 -> 19 Key
 */
+
+const byte interruptPin = 3;
 
 //#define DEBUG_ON
 //#define DEBUG_VMIN
@@ -41,20 +43,22 @@ ISR(WDT_vect) {
 }
 volatile int f_timer = 0;
 
-#define NODEID        5
-#define NODEID_SU     1
+#define NODEID        6
+#define NODEID_SU     6 // 1
 #define NETWORKID     100
-#define NETWORKID_SU  1
+#define NETWORKID_SU  100 // 1
 #define GATEWAYID     31
 #define FREQUENCY     RF69_868MHZ //Match this with the version of your Moteino! (others: RF69_433MHZ, RF69_868MHZ)
-#define KEY_SU        "setup1EncryptKey" //has to be same 16 characters/bytes on all nodes, not more not less!
-#define LED           13
+//#define KEY_SU        "setup1EncryptKey" //has to be same 16 characters/bytes on all nodes, not more not less!
+#define KEY_SU        "sampleEncryptKey" //has to be same 16 characters/bytes on all nodes, not more not less!
+
 //#define RADIOSW     4
 //#define LED_PIN (13)
 #define SERIAL_BAUD   57600
 #define ACK_TIME      450  // # of ms to wait for an ack was 30
 
 bool promiscuousMode = false;
+bool update1 = false;
 
 #define EV0 999
 #define tMin -20
@@ -99,6 +103,15 @@ byte noWait = 0;
 // *** SETUP ***
 // *** SETUP ***
 void setup() {
+  
+  //cli();
+  //CLKPR = bit(CLKPCE);
+  //CLKPR = 2; // div 2, i.e. slow down to 8 MHz
+  
+  //CLKPR = (1<<CLKPCE);
+  //CLKPR = B00000011; 
+  //sei();
+  
   Serial.begin(SERIAL_BAUD);
   Serial.print("\nSoftware description: ");
   Serial.println(sDesc);
@@ -123,15 +136,46 @@ void setup() {
   Serial.println("\nDEBUG_MIN output enabled");
   #endif  
 
-  pinMode(3, INPUT);
+  //pinMode(3, INPUT);
+  pinMode(interruptPin, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(interruptPin), waitStatus, CHANGE);
+
   pinMode(ONE_WIRE_POW, OUTPUT);
   digitalWrite(ONE_WIRE_POW, HIGH);
  
   //FIX
-  if (EEPROM.read(2) != 7)
-    EEPROM.write(2, 7); // node
+  if (EEPROM.read(2) != 6)
+    EEPROM.write(2, 6); // node
+  if (EEPROM.read(3) != 100)
+    EEPROM.write(3, 100); // network
+  keyRF[0] = 's';
+  keyRF[1] = 'a';
+  keyRF[2] = 'm';
+  keyRF[3] = 'p';
+  keyRF[4] = 'l';
+    keyRF[5] = 'e';
+    keyRF[6] = 'E';
+    keyRF[7] = 'n';
+    keyRF[8] = 'c';
+    keyRF[9] = 'r';
+    keyRF[10] = 'y';
+    keyRF[11] = 'p';
+    keyRF[12] = 't';
+    keyRF[13] = 'K';
+    keyRF[14] = 'e';
+    keyRF[15] = 'y';
+    keyRF[16] = '\0'; 
   
-  addNode = digitalRead(3);
+    for (int i = 4; i < 20; i++)
+    {
+      int y = i - 4;
+      if (keyRF[y] = EEPROM.read(i))
+        EEPROM.write(i, keyRF[y]); // password
+    }  
+    
+    
+  addNode = 0;
+  // FIX addNode = digitalRead(3);
   #ifdef DEBUG_ON
   Serial.print("\naddNode = ");
   Serial.println(addNode);
@@ -150,11 +194,6 @@ void setup() {
   Serial.print(fTemp); //converting to F loses some resolution, obvious when C is on edge between 2 values (ie 26C=78F, 27C=80F)
   Serial.println("F");
   #endif
-  
-  cli();
-  CLKPR = bit(CLKPCE);
-  //CLKPR = 1; // div 2, i.e. slow down to 8 MHz // affects Serial Power management?
-  sei();
   
   sensors.begin();
   numberOfDevices = sensors.getDeviceCount();
@@ -226,8 +265,26 @@ void loop() {
   readVcc();
   calcT();
   prDataOut();
+
+  if (update1 == true)
+  {
+    #ifdef DEBUG_MIN
+    Serial.print("\n** Update1 = ");
+    Serial.println(update1);
+    #endif
+    theVData.v1[0] = nodeIDRF;
+    readVcc();
+    calcT();
+    prDataOut();  
+    update1 = false;
+  }
   
-  if (radio.sendWithRetry(GATEWAYID, (const void*)(&theVData), sizeof(theVData)), 1)  // works??
+  #ifdef DEBUG_MIN
+  Serial.print("\n** Update1 = ");
+  Serial.println(update1);
+  #endif
+      
+  if (update1 == false && radio.sendWithRetry(GATEWAYID, (const void*)(&theVData), sizeof(theVData)), 1)  // works??
   {
     #ifdef DEBUG_ON
     Serial.print(" RF ok");
@@ -250,7 +307,7 @@ void loop() {
   theVData.v1[1] = 0; //tran
   
   while (rfC < rfCDelay) {
-    if (radio.receiveDone() && radio.DATALEN == sizeof(VPayload)) // ONLY works if adequate delay else get data from previous transmission??/
+    if (radio.receiveDone() && radio.DATALEN == sizeof(VPayload)) // ONLY works if adequate delay else get data from previous transmission?
     {
     theVData = *(VPayload*)radio.DATA; 
     prDataIn(); // save data so can send ACk and then print
@@ -328,6 +385,10 @@ void loop() {
     radio.sleep();
     //sleep_mode();
     Sleepy::loseSomeTime(TRANSMITPERIOD);
+    Sleepy::loseSomeTime(TRANSMITPERIOD);
+    Sleepy::loseSomeTime(TRANSMITPERIOD);
+    Sleepy::loseSomeTime(TRANSMITPERIOD);
+    Sleepy::loseSomeTime(TRANSMITPERIOD);
   }
   //}
 }
@@ -383,6 +444,7 @@ void printAddress(DeviceAddress deviceAddress)
 
 // FUNCTION calcT (calculate temperature and set max and min etc)
   void calcT() {
+  
   digitalWrite(ONE_WIRE_POW, HIGH);
   delay(5);
   sensors.begin();
@@ -394,7 +456,11 @@ void printAddress(DeviceAddress deviceAddress)
   float tempC = EV0;
   tempC = sensors.getTempC(tempDeviceAddress);
   digitalWrite(ONE_WIRE_POW, LOW);
-
+  /*
+  tT0 = EV0;
+  float tempC = EV0;
+  tempC = random(-9,35);
+  */
   if ((tempC < tMin) || (tempC > tMax)) {
     tT0 = EV0;
   } else {
@@ -728,4 +794,12 @@ void prDataIn99()
   Serial.print(theVData.v1[1]);    
   Serial.print("] ");
   #endif
+}
+
+void waitStatus() {
+  //detachInterrupt(3);
+  update1 = true;
+  noWait = 1;
+  //delay(1000);
+  //Serial.println("update temp");
 }
